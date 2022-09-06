@@ -1,0 +1,1419 @@
+####OPTOGENETIC CIRCUIT
+
+
+###  puts opto data csv files it into separate folders
+{tere<-choose.dir()
+
+setwd(gsub("\\\\","/",tere))
+dir.create(paste0(tere,"/analyzed_stats"))
+d<-list.files(tere, pattern="data.csv")
+#dd<-gsub("10c.*","",d)
+dd<-gsub("\\(.*","",d)
+dd
+flis<-unique(dd)
+flis
+for(i in 1:length(flis)){
+  dir.create(paste0(tere,"/analyzed_stats/",flis[i]))
+}
+for(i in 1:length(dd)){
+  
+  
+  write.csv(read.csv(paste0(gsub("\\\\","/",tere),"/",d[i])),paste0(gsub("\\\\","/",tere),"/analyzed_stats/",gsub("1_| \\(.*|10c.*","",d[i]),"/",d[i]))
+  
+}
+}
+
+##### Calculates changes in area, mobility, and larval states (ellipse)
+{
+  
+  tere<-choose.dir()
+  
+  
+  library(stringr)
+  library(qpcR)
+  library("gplots")
+  library(dplyr)
+  library(matrixStats)
+  library(zoo)
+  library(TTR)
+  library(viridis)
+  library(ggplot2)
+  library(markovchain)
+  library(stringr)
+  library(qpcR)
+  library("gplots")
+  library(dplyr)
+  library(matrixStats)
+  library(zoo)
+  library(TTR)
+  ###This is the code for extracting and combining area for each genotype
+  
+  
+  
+  vallow<--7.999
+  valmed<- -9.999
+  
+  valhigh<--14.999
+  
+  
+  setwd(gsub("\\\\","/",tere))
+  
+  dname<-list.dirs(".")
+  dname
+  dir.create(paste0(tere,"/analyzed_stats"))
+  
+  out<-paste0(tere,"/analyzed_stats")
+  outs<-gsub("\\\\","/",out)
+  
+  for(jj in 2:length(dname)){
+    
+    fname<-list.files(dname[jj],pattern="*.csv")
+    fname[1]
+    fnames<- sub('-Trial.*','',fname)
+    fnames
+    
+    Area<-data.frame()
+    Areah<-c()
+    
+    
+    
+    for(ii in 1:length(fname)){
+      
+      
+      fff<-paste(dname[jj],"/",fname[ii],sep="")
+      
+      og<-read.csv(fff,header=TRUE)
+      r<-rbind(og[2:nrow(og),])
+      are<-data.frame(r$Area)
+      eli<-data.frame(r$Aspect.Ratio_Maj_Min)
+      mobe<-data.frame(r$Mobility)
+      colnames(are)<-gsub("./|.csv","",fname[ii])
+      colnames(eli)<-gsub("./|.csv","",fname[ii])
+      colnames(mobe)<-gsub("./|.csv","",fname[ii])
+      
+      alde<-rbind(are,eli,mobe)
+      i<-alde[,1]
+      nn<-names(r)
+      Area<-rbind(Area,as.double(as.character(i)))
+      n9<-as.character(nn[9])
+      pp<-paste("Area__",gsub(".csv","",fnames[ii]),sep="")
+      Areah<-c(Areah,gsub("./|.csv","",fname[ii]))
+      
+    }
+    
+    Areaj<-as.data.frame(t(Area))
+    rownames(Areaj)<-c()
+    colnames(Areaj)<-Areah
+    setwd(gsub("\\\\","/",out))
+    
+    slice<-rbind(replicate(1,1:600,1),replicate(1,1:600,1),replicate(1,1:600,1))
+    
+    
+    arre<-data.frame(replicate(600,"area",1))
+    elli<-data.frame(replicate(600,"ellipse",1))
+    mobbe<-data.frame(replicate(600,"mobility",1))
+    colnames(arre)<-c("metric")
+    colnames(elli)<-c("metric")
+    colnames(mobbe)<-c("metric")
+    stats<-rbind(arre,elli,mobbe)
+    
+    
+    sauvme<-cbind(slice,stats,Areaj)
+    
+    write.csv(sauvme,paste(gsub("./","",dname[jj]),".csv",sep=""))
+    setwd(gsub("\\\\","/",tere))
+    
+    
+  }
+  
+  
+  
+  
+  
+  workme<-data.frame()
+  
+  
+  #tere<-choose.dir()
+  tere<-out
+  terwd<-gsub("\\\\","/",tere)
+  setwd(terwd)
+  
+  
+  
+  allfiles <- list.files(terwd, pattern = "*.csv", full.names = TRUE)
+  allfiles
+  # create an object with the directory name
+  the_dir <- terwd
+  # check to see if the directory exists - make it if it doesn't
+  
+  ########
+  
+  
+  datmn<-data.frame(matrix(nrow=length(allfiles),ncol=451))
+  
+  #mean_areachangeframe<-data.frame(matrix(nrow=length(allfiles)*451,ncol=1))
+  #mean_areachangename<-data.frame(matrix(nrow=length(allfiles)*451,ncol=1))
+  mean_areachangedata<-data.frame()
+  
+  
+  
+  
+  tailf<-data.frame(matrix(nrow=length(allfiles),ncol=20))
+  unlismn<-data.frame(matrix(nrow=length(allfiles),ncol=5740))
+  percentrespondercombine<-data.frame(matrix(nrow=length(allfiles),ncol=451))
+  percentresponderall<-data.frame(matrix(nrow=(3*length(allfiles)),ncol=451))
+  all_ct_percent<-list()
+  long_dat_comb<-list()
+  rowmn<-c()
+  i=0
+  
+  # print the name of each file
+  for (file in allfiles) {
+    # read in the csv
+    ########
+    i=i+1
+    the_data <- read.csv(file)
+    dats<-(the_data[1:600,4:ncol(the_data)])#start from the column number from which your expression value starts [eg. column no. 2 in this case] before the comma is row number (1:32)
+    
+    dat<-as.matrix(dats)#Convert the data.frame to matrix
+    xry<-dat[1:451,]
+    x<-xry[,complete.cases(t(dat))]
+    y<-colMeans(x[1:139,])
+    
+    yvec<-c(y)
+    
+    s<-t(x)
+    tt<- (y-s)*-1
+    
+    perchan<-t(tt/yvec)*100
+    
+  
+    pmatarranged<-perchan[,order(colMeans(perchan[160:450,]))]
+    
+    perchans<-data.frame(pmatarranged)
+    
+    
+    unlisdat<-data.frame(perchans)
+    unlis<-unlist(unlisdat)
+    names(unlis)<-c(basename(file))
+    unlistrans<-t(unlis)
+    names(unlis)<-basename(file)
+    
+    
+    permean<-rowMeans(perchan, na.rm=TRUE)
+    persem<-rowSds(perchan)/sqrt(ncol(perchan))
+    
+    percentresponders <-rowSums(perchan<valmed)/ncol(perchan)
+    
+    percentresponders <-rowSums(perchan<valmed)/ncol(perchan)
+    percentrespondershigh <-rowSums(perchan<valhigh)/ncol(perchan)*100
+    percentrespondersmed <-(rowSums(perchan<valmed)-rowSums(perchan<valhigh))/ncol(perchan)*100
+    percentresponderslow<-(rowSums(perchan<vallow)-rowSums(perchan<valmed))/ncol(perchan)*100
+    perresponsder_summary<-data.frame(cbind(percentresponderslow,percentrespondersmed,percentrespondershigh))
+    
+    
+    colnames(perresponsder_summary)<-c(paste0("percentresponderslow_",basename(file)), paste0("percentresponderslmed_",basename(file)),paste0("percentrespondershigh_",basename(file)))
+    
+    #write.csv(perresponsder_summary,"test.csv")
+    
+    write.csv(t(perresponsder_summary), file = paste0(the_dir, "/","perresponsder_summary", basename(file)))
+    
+    percentresponderall [i,]<-t(perresponsder_summary)
+    
+    ###this portion will give true latency for continuous CT below threshold (val=) for 15 seconds
+    ###latency for 10 seconds medium treshold
+    
+    
+    
+    perchanlatency<-data.frame(perchan)
+    perchanlatencyval<-perchanlatency-valmed
+    perchanlatencyval[perchanlatencyval > 0] <- NA
+    
+    naperchanlatency<-perchanlatencyval
+    
+    
+    
+    
+    
+    
+    lmax<-naperchanlatency
+    lmax[lmax < 0] <- 1
+    lmax[is.na(lmax)] <- 0
+    lmaxt<-apply(lmax, 2, SMA, n=15)
+    lmaxt[is.na(lmaxt)] <- 0
+    lmaxt[lmaxt < 1] <- 0
+    latencymedten<-(apply(lmaxt[150:450,],2,which.max))
+    latencymedten[latencymedten == 1] <- NA
+    perlatencymedten<-rowMeans(lmaxt, na.rm=TRUE)
+    latencymedfive<-(apply(lmaxt[150:300,],2,which.max))
+    latencymedfive[latencymedfive == 1] <- NA
+    
+    
+    summary<-cbind(perchan,permean,persem,percentresponders,perlatencymedten)
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    fivesecstim<-summary[150:300,]
+    fivesecstimmean<-colMeans(fivesecstim)
+    
+    fivesecminifra<-(apply(fivesecstim,2,which.min))
+    fivesecframeunnegmed<-colSums(fivesecstim<valmed)
+    fivesecframeunneglow<-colSums(fivesecstim<vallow)
+    fivesecframeunneghigh<-colSums(fivesecstim<valhigh)
+    tensecstim<-summary[150:450,]
+    tensecstimmean<-colMeans(tensecstim)
+    tensecframeunnegmed<-colSums(tensecstim<valmed)
+    tensecframeunneglow<-colSums(tensecstim<vallow)
+    tensecframeunneghigh<-colSums(tensecstim<valhigh)
+    
+    
+    
+    
+    calc<-rbind(summary,fivesecstimmean,tensecstimmean,fivesecframeunneglow,fivesecframeunnegmed,fivesecframeunneghigh,tensecframeunneglow,tensecframeunnegmed,tensecframeunneghigh,fivesecminifra,latencymedten,latencymedfive)
+    saveme<-data.frame(calc)
+    colnames(perchans)[colnames(perchans)=="User"]<-paste0(basename(file)) 
+    colnames(saveme)[colnames(saveme)=="permean"]<-paste0("mean_",basename(file)) 
+    colnames(saveme)[colnames(saveme)=="persem"]<-paste0("sem_",basename(file)) 
+    colnames(saveme)[colnames(saveme)=="percentresponders"]<-paste0("percentresponders___",basename(file)) 
+    colnames(saveme)[colnames(saveme)=="perlatencymedten"]<-paste0("perlatencymedten___",basename(file)) 
+    
+    rownames(saveme)[rownames(saveme)=="fivesecminifra"]<-paste0("fivesecminifra___",basename(file))
+    rownames(saveme)[rownames(saveme)=="fivesecstimmean"]<-paste0("fivesecstimmean___",basename(file))
+    rownames(saveme)[rownames(saveme)=="tensecstimmean"]<-paste0("tensecstimmean___",basename(file)) 
+    rownames(saveme)[rownames(saveme)=="fivesecframeunneglow"]<-paste0("fivesecframeunneglow___",basename(file)) 
+    rownames(saveme)[rownames(saveme)=="tensecframeunneglow"]<-paste0("tensecframeunneglow___",basename(file)) 
+    
+    rownames(saveme)[rownames(saveme)=="tensecframeunnegmed"]<-paste0("tensecframeunnegmed___",basename(file)) 
+    rownames(saveme)[rownames(saveme)=="fivesecframeunnegmed"]<-paste0("fivesecframeunnegmed___",basename(file)) 
+    
+    rownames(saveme)[rownames(saveme)=="fivesecframeunneghigh"]<-paste0("fivesecframeunneghigh___",basename(file)) 
+    rownames(saveme)[rownames(saveme)=="tensecframeunneghigh"]<-paste0("tensecframeunneghigh___",basename(file)) 
+    rownames(saveme)[rownames(saveme)=="latencymedten"]<-paste0("latencymedten_for_half_sec_consecutive_ct___",basename(file))
+    rownames(saveme)[rownames(saveme)=="latencymedfive"]<-paste0("latencymedfive_for_half_sec_consecutive_ct___",basename(file))
+    
+    #######
+    
+    
+    datmn[i,]<-c(as.numeric(permean))
+    
+    unlismn[i,]<-c(as.numeric(unlistrans[1:5740]))
+    percentrespondercombine[i,]<-c(as.numeric(percentresponders))
+    
+    
+    file1<-basename(file)
+    filesplt<-strsplit(file1,split="\\.")
+    
+    pgen<-paste(filesplt[[1]][1],"_Mean",sep="")
+    geno<-sub('.*___', '', pgen)  
+    pas<-sub('_areaArea_Mean.*', '', geno)
+    rowmn<-c(rowmn,as.character(pas))
+    
+    
+    
+    pastimeseries<-replicate(451,pas)
+    mean_change_area<-cbind(pastimeseries,permean,1:451)
+    
+    #mean_areachange[,i]<-rbind(mean_change_area)
+    
+    #mean_areachangeframe[i,]<-c(as.numeric(1:451))
+    #mean_areachangename[i,]<-c((pastimeseries))
+    mean_areachangedata<- rbind(mean_areachangedata, mean_change_area)
+    
+    #iii<-i+1
+    #mean_areachangedata[iii,]<-c((as.numeric(1:451)))
+    
+    
+    
+    tailcol<-ncol(saveme)
+    
+    
+    
+    
+    
+    
+    
+    
+    tailcolt<-tailcol-2
+    
+    
+    
+    tailcolr<-tailcol-4
+    summaryfinal<-saveme[,1:tailcolr]
+    
+    meansem<-saveme[,tailcolt:tailcol]
+    meansemt<-t(meansem)
+    
+    
+    
+    rowf<- tail(summaryfinal,11)
+    fivesecondpercentresponderlow <-(sum(colSums(rowf[3,]>15,na.rm=TRUE))/ncol(rowf[3,])*100) 
+    fivesecondpercentrespondermed <-(sum(colSums(rowf[4,]>15,na.rm=TRUE))/ncol(rowf[4,])*100)
+    fivesecondpercentresponderhigh <-(sum(colSums(rowf[5,]>15,na.rm=TRUE))/ncol(rowf[5,])*100)
+    
+    tensecondpercentresponderlow  <-(sum(colSums(rowf[6,]>15,na.rm=TRUE))/ncol(rowf[6,])*100)
+    tensecondpercentrespondermed  <-(sum(colSums(rowf[7,]>15,na.rm=TRUE))/ncol(rowf[7,])*100)
+    tensecondpercentresponderhigh  <-(sum(colSums(rowf[8,]>15,na.rm=TRUE))/ncol(rowf[8,])*100)
+    
+    
+    
+    
+    fivesecondpercentrespondermedcon <-(sum(colSums(rowf[11,]>1,na.rm=TRUE))/ncol(rowf[11,])*100)
+    
+    tensecondpercentrespondermedcon  <-(sum(colSums(rowf[10,]>1,na.rm=TRUE))/ncol(rowf[10,])*100)
+    
+    
+    
+    
+    
+    
+    
+    
+    tailfmean<- rowMeans(rowf,na.rm=TRUE)
+    
+    rowt<-t(cbind(t(tailfmean),fivesecondpercentresponderlow,fivesecondpercentrespondermed,fivesecondpercentresponderhigh,tensecondpercentresponderlow,tensecondpercentrespondermed,tensecondpercentresponderhigh,fivesecondpercentrespondermedcon,tensecondpercentrespondermedcon,ncol(lmax)))  
+    
+    
+    rownames(rowt)[rownames(rowt)=="fivesecondpercentresponderlow"]<-paste0("fivesecondpercentresponderlow",basename(file))
+    rownames(rowt)[rownames(rowt)=="fivesecondpercentrespondermed"]<-paste0("fivesecondpercentrespondermed",basename(file))
+    rownames(rowt)[rownames(rowt)=="fivesecondpercentresponderhigh"]<-paste0("fivesecondpercentresponderhigh",basename(file))
+    
+    rownames(rowt)[rownames(rowt)=="tensecondpercentresponderlow"]<-paste0("tensecondpercentresponderlow",basename(file))
+    rownames(rowt)[rownames(rowt)=="tensecondpercentrespondermed"]<-paste0("tensecondpercentrespondermed",basename(file)) 
+    rownames(rowt)[rownames(rowt)=="tensecondpercentresponderhigh"]<-paste0("tensecondpercentresponderhigh",basename(file)) 
+    
+    
+    
+    
+    
+    
+    
+    tailf[i,]<-c(as.numeric(rowt))
+    stats<-summaryfinal[452:462,]
+    stats[is.na(stats)] <- "xxx"
+    stats_df<-data.frame(stats)
+    frames_low_five_high<-(t(stats[5,]))
+    frames_low_five_med<-(t(stats[4,]))
+    frames_low_five_low<-(t(stats[3,]))
+    frames_low_ten_high<-(t(stats[8,]))
+    frames_low_ten_med<-(t(stats[7,]))
+    frames_low_ten_low<-(t(stats[6,]))
+    
+    
+    real_low_frames_five<-data.frame(t(as.numeric(frames_low_five_low)-as.numeric(frames_low_five_med)))
+    real_med_frames_five<-data.frame(t(as.numeric(frames_low_five_med)-as.numeric(frames_low_five_high)))
+    real_low_frames_ten<-data.frame(t(as.numeric(frames_low_ten_low)-as.numeric(frames_low_ten_med)))
+    real_med_frames_ten<-data.frame(t(as.numeric(frames_low_ten_med)-as.numeric(frames_low_ten_high)))
+    
+    colnames(real_low_frames_five)<-colnames(stats) 
+    colnames(real_med_frames_five)<-colnames(stats) 
+    colnames(real_low_frames_ten)<-colnames(stats) 
+    colnames(real_med_frames_ten)<-colnames(stats) 
+    
+    fin_stats<-rbind(stats,(real_low_frames_five),real_med_frames_five,real_low_frames_ten,real_med_frames_ten)
+    
+    rownames(fin_stats)<-c(rownames(stats),paste0("real_low_frames_five___",basename(file)),paste0("real_med_frames_five___",basename(file)),paste0("real_low_frames_ten___",basename(file)),paste0("real_med_frames_ten___",basename(file)))
+    
+    
+    werser<-cbind(gsub(".*Track-|.csv|.*___","",rownames(fin_stats)),gsub("___.*","",rownames(fin_stats)))
+    colnames(werser)<-c("genotype","metric")
+    fin_stats_done<-cbind(werser,fin_stats)
+    
+    des<-fin_stats_done[,3:ncol(fin_stats_done)]
+    propname<-gsub(".*Track-|.csv|.*___","",rownames(fin_stats))
+    propname
+    genotyp<-(replicate(ncol(des),propname[1]))
+    
+    longme<- rbind((genotyp),des)
+    rownames(longme)<-c("Genotype",as.character(fin_stats_done$metric))
+    
+    write.csv(t(longme), file = paste0(the_dir, "/", "2_long_dat",basename(file)))
+    
+    t_longme<-data.frame(t(longme))
+    long_dat_comb[[i]]<-t_longme
+    
+    
+    write.csv(t(rowt), file = paste0(the_dir, "/", "tail",basename(file)))
+    # write.csv(meansemt, file = paste0(the_dir, "/", "meansem",basename(file)))
+    write.csv(saveme, file = paste0(the_dir, "/","calculated_output", basename(file)))
+    #write.csv(unlistrans, file = paste0(the_dir, "/","heat", basename(file)))
+    write.csv(t(perchans), file = paste0(the_dir, "/","heatmap", basename(file)))
+    
+    
+    
+ 
+    
+    pmatarranged<-perchans[,order(colMeans(perchans[160:450,]))]
+    
+    
+    
+    tiff(filename=paste(the_dir, "/",gsub(".csv","",basename(file)),"area_heat.tiff",sep=""),width=1000,height=1000,units="px",res=300)#Enter the file name
+    my_palette <-  colorRampPalette(c("purple","white","green"))
+    heatmap.2(t(pmatarranged),breaks=seq(-30,30, length.out=50) ,scale="none",Rowv=FALSE, Colv=FALSE, col=my_palette, key=T, keysize=2,density.info="none", trace="none",cexCol=0.3,  labRow = NULL,cexRow=0.3,dendrogram="none", notecol="red") #Change the labRow
+    #heatmap.2(t(datme),breaks=seq(0,7, length.out=7) ,scale="none",Rowv=FALSE, Colv=FALSE, col=my_palette, key=T, keysize=1,density.info="none", trace="none",cexCol=0.3,  labRow = NULL,cexRow=0.3,dendrogram="none", notecol="red",  margins = c(5, 5)) #Change the labRow for the label of the row names. when scale is none there is no z score scale
+    
+    dev.off()
+    
+    der<-data.frame(perresponsder_summary)
+    
+    plot_per_lowmehi<-data.frame(cbind((replicate(451,"low")),(replicate(451,"med")),(replicate(451,"high"))))
+    
+    c<-cbind(data.frame(1:451), plot_per_lowmehi$X1)
+    colnames(c)<-c("frames","cate")
+    ce<-cbind(data.frame(1:451), plot_per_lowmehi$X2)
+    colnames(ce)<-c("frames","cate")
+    cee<-cbind(data.frame(1:451), plot_per_lowmehi$X3)
+    colnames(cee)<-c("frames","cate")
+    plot_per_r<-rbind(c,ce,cee)
+    
+    de<-cbind(data.frame(der[,1]))
+    colnames(de)<-c("percent_ct")
+    dee<-cbind(data.frame(der[,2]))
+    colnames(dee)<-c("percent_ct")
+    deee<-cbind(data.frame(der[,3]))
+    colnames(deee)<-c("percent_ct")
+    
+    s<-rbind(de,dee,deee)
+    ploet<-cbind(plot_per_r,s)
+    
+    tiff(filename=paste("Prop",gsub(".*stats/|.csv","",basename(file)),".tiff",sep=""),width=2000,height=1000,units="px",res=300)#Enter the file name
+    print(ggplot(ploet,aes(x=frames,y=percent_ct,group=as.factor(cate),fill=as.factor(cate)))+geom_area()+ 
+            scale_fill_viridis(discrete = T)+ ggtitle(paste("Prop",gsub(".*stats/|.csv","",file),sep=""))+ylim(0,100))
+    
+    dev.off()
+    # write.csv(lmaxt, file = paste0(the_dir, "/", "moving_avg",basename(file)))
+    rownames(fin_stats_done)<-fin_stats_done$metric
+    write.csv(t(fin_stats_done), file = paste0(the_dir, "/", "2_Summary",basename(file)))
+    
+    letme<-latencymedten
+    letme[is.na(letme)] <- 300
+    ct_cumu<-list()
+    for(cte in 1:length(letme)){
+      
+      
+      bef<-data.frame(replicate(letme[cte],0))
+      bef
+      ct_Hap<-data.frame(replicate(301-letme[cte],1))
+      ct_Hap
+      colnames(bef)<-"v"
+      colnames(ct_Hap)<-"v"
+      cumuct_lar<- data.frame(rbind(bef,ct_Hap))
+      colnames(cumuct_lar)<- paste0("cte",cte)
+      ct_cumu[[cte]]<-cumuct_lar
+    }
+    fme<-data.frame(dplyr::bind_cols(ct_cumu))
+    ct_cumu_curve<-data.frame(rowSums(fme)/ncol(fme)*100)
+    colnames(ct_cumu_curve)<-basename(file)
+    all_ct_percent[[i]]<-ct_cumu_curve
+    write.csv(perchan, file = paste0(the_dir, "/", "2_Calculated_area_stats_",basename(file)))
+    
+    
+  }
+  
+  long_ets<-dplyr::bind_rows(long_dat_comb)
+  
+  write.csv(long_ets,"1_Long_Data.csv")
+  
+  cumulative_ct<-dplyr::bind_cols(all_ct_percent)
+  write.csv(cumulative_ct[1:300,],"1_cumulative curve.csv")
+  rownames(datmn)<-as.character(rowmn)
+  tdatmn<-t(datmn)
+  rownames(unlismn)<-as.character(rowmn)
+  tunlismn<-t(unlismn)
+  
+  rownames(tailf)<-as.character(rowmn)
+  tail5n<-t(tailf)
+  colnames(tailf)<-as.character(c("5 sec mean area","10 sec mean area","5 sec frames below -8 treshhold","5 sec frames below -10 treshhold","5 sec frames below -12 treshhold","10 sec frames below -8 treshhold","10 sec frames below -10 treshhold","10 sec frames below -12 treshhold","5 sec time to minimum frames","10 sec analysis latency to holding ct for 0.5 seconds consecutively","5 sec analysis latency to holding ct for 0.5 ","5 sec % response for animals below -8% for 15frames","5 sec % response for animals below -10% for 15frames","5 sec % response for animals below -12% for 15frames","10 sec % response for animals below -8% for 15frames","10 sec % response for animals below -10% for 15frames","10 sec % response for animals below -12% for 15frames","fivesecondpercentrespondermedcon","tensecondpercentrespondermedcon","count"))
+  rownames(percentrespondercombine)<-as.character(rowmn)
+  tunlismn<-t(percentrespondercombine)
+  write.csv(t(datmn), file = paste0(the_dir,"/","1_Combined_heatmap.csv"))
+  #write.csv(unlismn, file = paste0(the_dir,"/","Combined_stimheatmap.csv"))
+  write.csv(tailf, file = paste0(the_dir, "/","1_mean_stats.csv"))
+  write.csv(t(percentrespondercombine), file = paste0(the_dir, "/","1_percentrespondercombine.csv"))
+  write.csv(mean_areachangedata,file = paste0(the_dir, "/","1_mean_change_area_datastudio.csv"))
+  
+  latectduration<-(tailf[,7]-tailf[,4])/30
+  earlyctduration<-tailf[,4]/30
+  finalcount<-tailf[,20]
+  earlyctpercentage<-tailf[,13]
+  latectpercentage<-tailf[,16]-tailf[,13]
+  latencyforCTinsec<-tailf[,10]/30
+  
+  finaldatastudiostats<-cbind(latectduration,earlyctduration,finalcount,earlyctpercentage,latectpercentage,latencyforCTinsec)
+  rownames(finaldatastudiostats)<-as.character(rowmn)
+  write.csv(finaldatastudiostats,file = paste0(the_dir, "/","1_finaldatastudiostats.csv"))
+  
+  
+  
+  
+  
+  
+  
+  
+  ggg_data<-data.frame(read.csv("1_Combined_heatmap.csv", header = TRUE))
+  gg_data<-ggg_data[1:450,2:ncol(ggg_data)]
+  
+  for(ii in 1:ncol(gg_data)){
+    print(ii)
+    coln<-gsub("\\."," ",colnames(gg_data))
+    colnaa<-gsub("_Mean","",coln)
+    colna<-gsub(" ","_",colnaa)
+    genotyp<-(replicate(nrow(gg_data),colna[ii]))
+    
+    longme<- data.frame(cbind((genotyp),gg_data[,ii]))
+    colnames(longme)<-c("Genotype","percent_responder")
+    
+    write.csv(longme,paste(colna[ii],"__longper.csv"))
+    
+  }
+  
+  fills  <- list.files(pattern = '__longper.csv')
+  fills
+  tables <- lapply(fills, read.csv, header = TRUE)
+  
+  long_per_res <- do.call(bind_rows , tables)
+  write.csv(long_per_res,"1__long_percent_area_change.csv")
+  file.remove(fills)
+  
+  
+  
+  
+  
+  
+  
+  
+  ggg_data<-data.frame(read.csv("1_percentrespondercombine.csv", header = TRUE))
+  gg_data<-ggg_data[1:450,2:ncol(ggg_data)]*100
+  
+  for(ii in 1:ncol(gg_data)){
+    print(ii)
+    coln<-gsub("\\."," ",colnames(gg_data))
+    colnaa<-gsub("_Mean","",coln)
+    colna<-gsub(" ","_",colnaa)
+    genotyp<-(replicate(nrow(gg_data),colna[ii]))
+    
+    longme<- data.frame(cbind((genotyp),gg_data[,ii]))
+    colnames(longme)<-c("Genotype","percent_responder")
+    
+    write.csv(longme,paste(colna[ii],"__longper.csv"))
+    
+  }
+  
+  fills  <- list.files(pattern = '__longper.csv')
+  fills
+  tables <- lapply(fills, read.csv, header = TRUE)
+  
+  long_per_res <- do.call(bind_rows , tables)
+  write.csv(long_per_res,"1__long_insta_percent_responders.csv")
+  file.remove(fills)
+  
+  
+  
+  
+  
+  
+  
+  
+  ggg_data<-data.frame(read.csv("1_cumulative curve.csv", header = TRUE))
+  
+  replicate(ncol(ggg_data)-1,1:150)
+  
+  
+  basel<-data.frame(replicate(ncol(ggg_data)-1,1:150))
+  basel[basel>0] <- 0
+  fe_data<-ggg_data[1:300,2:ncol(ggg_data)]
+  
+  colnames(basel)<-colnames(fe_data)
+  gg_data<-rbind(basel,fe_data)
+  
+  
+  for(ii in 1:ncol(gg_data)){
+    print(ii)
+    coln<-gsub("\\."," ",colnames(gg_data))
+    colnaa<-gsub(".csv","",coln)
+    colna<-gsub(" ","_",colnaa)
+    genotyp<-(replicate(nrow(gg_data),colna[ii]))
+    
+    longme<- data.frame(cbind((genotyp),gg_data[,ii]))
+    colnames(longme)<-c("Genotype","percent_responder")
+    
+    write.csv(longme,paste(colna[ii],"__longper.csv"))
+    
+  }
+  
+  fills  <- list.files(pattern = '__longper.csv')
+  fills
+  tables <- lapply(fills, read.csv, header = TRUE)
+  long_per_res <- do.call(bind_rows , tables)
+  write.csv(long_per_res,"1__long_cumu_percent_responders.csv")
+  file.remove(fills)
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  dat<-data.frame(read.csv("1_mean_stats.csv"))
+  rownames(dat)<-dat$X
+  
+  fiveseclow_CT<-dat$count*dat$X5.sec...response.for.animals.below..8..for.15frames/100
+  fivesecmed_CT<-dat$count*dat$X5.sec...response.for.animals.below..10..for.15frames/100
+  fivesechigh_CT<-dat$count*dat$X5.sec...response.for.animals.below..12..for.15frames/100
+  tenseclow_CT<-dat$count*dat$X10.sec...response.for.animals.below..8..for.15frames/100
+  tensecmed_CT<-dat$count*dat$X10.sec...response.for.animals.below..10..for.15frames/100
+  tensechigh_CT<-dat$count*dat$X10.sec...response.for.animals.below..12..for.15frames/100
+  
+  fiveseclow_NR<-dat$count-fiveseclow_CT
+  fivesecmed_NR<-dat$count-fivesecmed_CT
+  fivesechigh_NR<-dat$count-fivesechigh_CT
+  tenseclow_NR<-dat$count-tenseclow_CT
+  tensecmed_NR<-dat$count-tensecmed_CT
+  tensechigh_NR<-dat$count-tensechigh_CT
+  
+  
+  
+  new_dat<-cbind(dat,fiveseclow_CT,fiveseclow_NR,fivesecmed_CT,fivesecmed_NR,fivesechigh_CT,fivesechigh_NR,tenseclow_CT,tenseclow_NR,tensecmed_CT,tensecmed_NR,tensechigh_CT,tensechigh_NR)
+  write.csv(new_dat, "1_all_stats_w_CT_NR_count.csv")
+  
+  
+  
+  
+  ###ELLIPSE####
+  
+  
+  ###ELLIPSE####
+  
+  allfiles
+  
+  
+  tailf<-data.frame(matrix(nrow=length(allfiles),ncol=20))
+  average_time<-list()
+  
+  ellipse_individ<-list()
+  
+  ellipse_mean_all<-list()
+  
+  all_elipse_norm_mean<-list()
+  i=0
+  for (file in allfiles) {
+    # read in the csv
+    ########
+    i=i+1
+    the_data <- read.csv(file)
+    dats<-(the_data[601:1200,4:ncol(the_data)])#start from the column number from which your expression value starts [eg. column no. 2 in this case] before the comma is row number (1:32)
+    
+    
+    ellipse_mean<-data.frame(rowMeans(dats))
+    colnames(ellipse_mean)<-c(paste0(gsub(".*stats/|.csv","",file)))
+    
+    
+    
+    
+    datss<-dats[1,]>2.5
+    datss
+    ##datme<-dats[,(c(datss))]
+    datme<-dats
+    propovertime<-list()
+    for(ro in 1:nrow(datme)){
+      
+      one_two<-sum(datme[ro,]>1 & datme[ro,]<2.5)/ncol(datme)*100
+      
+      propovertime[ro]<-(one_two)
+    }
+    d<-data.frame(t(dplyr::bind_cols(propovertime)))
+    colnames(d)<-c(paste0(gsub(".*curly/|_combo.csv","",file)))
+    
+    average_time[i]<-d
+    ellipse_mean_all[i]<-ellipse_mean
+    
+    
+    
+    
+    
+    
+    
+    
+    perchan<-as.matrix(dats)#Convert the data.frame to matrix
+    
+   
+    
+    
+    pmatarranged<-perchan[,order(colMeans(perchan))]
+    
+    
+    perchans<-data.frame(pmatarranged)
+    
+    
+
+    
+    ellip_base_raw<-perchan[1:150,]
+    ellip_fivesecstim_raw<-perchan[150:300,]
+    ellip_tensecstim_raw<-perchan[150:450,]
+    
+    ellip_base_raw_mean<-colMeans(ellip_base_raw)
+    ellip_fivesecstim_raw_mean<-colMeans(  ellip_fivesecstim_raw)
+    ellip_tensecstim_raw_mean<-colMeans(ellip_tensecstim_raw)
+    
+    
+    ellip_prestim_val<-    colMeans(perchan[139:150,])
+    ellip_base_norm<-perchan[1:150,]
+    ellip_fivesecstim_norm<-perchan[150:300,]
+    ellip_tensecstim_norm<-perchan[150:450,]
+    
+    ellip_base_norm_mean<-colMeans(ellip_base_norm)
+    ellip_fivesecstim_norm_mean<-colMeans(ellip_fivesecstim_norm)
+    ellip_tensecstim_norm_mean<-colMeans(ellip_tensecstim_norm)
+    
+    tensecframesturnedsec<-colSums(perchan[150:450,]<2.5)/30
+    fivesecframesturnedsec<-colSums(perchan[150:300,]<2.5)/30
+    
+    baseframesturnedsec<-colSums(perchan[1:150,]<2.5)/30
+    
+    
+    
+    ellip_individ_stats<- rbind(ellip_base_raw_mean,ellip_prestim_val,ellip_fivesecstim_raw_mean,ellip_tensecstim_raw_mean,ellip_base_norm_mean,ellip_fivesecstim_norm_mean,ellip_tensecstim_norm_mean,baseframesturnedsec,fivesecframesturnedsec,tensecframesturnedsec)
+    
+    genotyp<-(replicate(ncol(ellip_base_raw),paste0(gsub(".*stats/|.csv","",file))))
+    ssss<-rbind((genotyp),colnames(ellip_individ_stats),(ellip_individ_stats))
+    
+    rownames(ssss)<-c("Genotype","OG name",rownames(ellip_individ_stats))
+    
+    colnames(ssss)<-NULL
+    
+    
+    ellipse_individ[[i]]<-data.frame(ssss)
+    write.csv(ellip_individ_stats,file = paste0(the_dir, "/", "2_individual ellipse stats_",basename(file)))
+    
+    
+    
+
+    
+    
+    pmatarranged<-perchan[,order(colMeans(perchan[160:450,]))]
+    
+    
+    
+    tiff(filename=paste(the_dir, "/",gsub(".csv","",basename(file)),"_ellipse_heat.tiff",sep=""),width=1000,height=1000,units="px",res=300)#Enter the file name
+    my_palette <-  colorRampPalette(c("purple","blue","cyan","green","yellow","orange","red"))
+    heatmap.2(t(pmatarranged),breaks=seq(1,7, length.out=50) ,scale="none",Rowv=FALSE, Colv=FALSE, col=my_palette, key=T, keysize=2,density.info="none", trace="none",cexCol=0.3,  labRow = NULL,cexRow=0.3,dendrogram="none", notecol="red") #Change the labRow
+    #heatmap.2(t(datme),breaks=seq(0,7, length.out=7) ,scale="none",Rowv=FALSE, Colv=FALSE, col=my_palette, key=T, keysize=1,density.info="none", trace="none",cexCol=0.3,  labRow = NULL,cexRow=0.3,dendrogram="none", notecol="red",  margins = c(5, 5)) #Change the labRow for the label of the row names. when scale is none there is no z score scale
+    
+    dev.off()
+    
+    
+    
+    write.csv(pmatarranged, file = paste0(the_dir, "/", "2_Calculated_ellipse_stats_",basename(file)))
+    all_elipse_norm_mean[[i]]<-permean
+    
+    
+    
+  }
+  
+  
+  
+  long_combined<-data.frame(t(dplyr::bind_cols(ellipse_individ)))
+  write.csv(long_combined, file = "1_curly_individual_metrics.csv")
+  
+  
+  
+  
+  long_combined<-data.frame((dplyr::bind_cols(average_time)))
+  colnames(long_combined)<-gsub(".*stats/|.csv","",allfiles)
+  write.csv(long_combined, file = "1_curly_percent below 2_5 time in zone.csv")
+  
+  long_combined<-data.frame((dplyr::bind_cols(ellipse_mean_all)))
+  colnames(long_combined)<-gsub(".*stats/|.csv","",allfiles)
+  write.csv(long_combined, file = "1_curly_raw_average_ellipse.csv")
+  
+  long_combined<-data.frame((dplyr::bind_cols(all_elipse_norm_mean)))
+  colnames(long_combined)<-gsub(".*stats/|.csv","",allfiles)
+  write.csv(long_combined, file = "1_curly_norm_average_ellipse.csv")
+  
+  
+  
+  
+  
+  
+  ggg_data<-data.frame(read.csv("1_curly_norm_average_ellipse.csv", header = TRUE))
+  gg_data<-ggg_data[1:450,2:ncol(ggg_data)]
+  
+  for(ii in 1:ncol(gg_data)){
+    print(ii)
+    coln<-gsub("\\."," ",colnames(gg_data))
+    colnaa<-gsub(".csv","",coln)
+    colna<-gsub(" ","_",colnaa)
+    genotyp<-(replicate(nrow(gg_data),colna[ii]))
+    
+    longme<- data.frame(cbind((genotyp),gg_data[,ii]))
+    colnames(longme)<-c("Genotype","norm_curly_average")
+    
+    write.csv(longme,paste(colna[ii],"__longper.csv"))
+    
+  }
+  
+  fills  <- list.files(pattern = '__longper.csv')
+  fills
+  tables <- lapply(fills, read.csv, header = TRUE)
+  long_per_res <- do.call(bind_rows , tables)
+  write.csv(long_per_res,"1__long_norm_curly_average.csv")
+  file.remove(fills)
+  
+  
+  
+  
+  
+  
+  ggg_data<-data.frame(read.csv("1_curly_raw_average_ellipse.csv", header = TRUE))
+  gg_data<-ggg_data[1:450,2:ncol(ggg_data)]
+  
+  for(ii in 1:ncol(gg_data)){
+    print(ii)
+    coln<-gsub("\\."," ",colnames(gg_data))
+    colnaa<-gsub(".csv","",coln)
+    colna<-gsub(" ","_",colnaa)
+    genotyp<-(replicate(nrow(gg_data),colna[ii]))
+    
+    longme<- data.frame(cbind((genotyp),gg_data[,ii]))
+    colnames(longme)<-c("Genotype","raw_curly_average")
+    
+    write.csv(longme,paste(colna[ii],"__longper.csv"))
+    
+  }
+  
+  fills  <- list.files(pattern = '__longper.csv')
+  fills
+  tables <- lapply(fills, read.csv, header = TRUE)
+  long_per_res <- do.call(bind_rows , tables)
+  write.csv(long_per_res,"1__long_raw_curly_average.csv")
+  file.remove(fills)
+  
+  
+  
+  
+  
+  
+  
+  #######MOBILITY#####
+  
+  
+  #######MOBILITY#####
+  
+  
+  
+  workme<-data.frame()
+  library(stringr)
+  library(qpcR)
+  library("gplots")
+  library(dplyr)
+  library(matrixStats)
+  library(zoo)
+  library(TTR)
+  
+  
+  
+  allfiles 
+  
+  
+  mob_individ<-list()
+  datmn<-data.frame(matrix(nrow=length(allfiles),ncol=451))
+  
+  mean_areachangedata<-data.frame()
+  
+  all_mob_mean<-list()
+  rowmn<-c()
+  i=0
+  long_dats<-list()
+  average_time<-list()
+  # print the name of each file
+  for (file in allfiles) {
+    # read in the csv
+    ########
+    i=i+1
+    the_data <- read.csv(file)
+    dats<-(the_data[1201:1800,4:ncol(the_data)])#start from the column number from which your expression value starts [eg. column no. 2 in this case] before the comma is row number (1:32)
+    
+    dat<-as.matrix(dats)#Convert the data.frame to matrix
+    xry<-dat[1:451,]
+    x<-xry[,complete.cases(t(dat))]
+    y<-colMeans(x[1:139,])
+    
+    
+    yvec<-c(y)
+    
+    s<-t(x)
+    tt<- (y-s)*-1
+    
+    perchan<-t(tt/yvec)*100
+    
+    
+    pmatarranged<-perchan[,order(colMeans(perchan))]
+    
+    
+    perchans<-data.frame(pmatarranged)
+    
+    
+    permean<-data.frame(rowMeans(perchan, na.rm=TRUE))
+    colnames(permean)<-c(gsub(".csv","",basename(file)))
+    persem<-rowSds(perchan)/sqrt(ncol(perchan))
+    
+    #percent_immobile <-rowSums(perchans<-25)/ncol(perchans)
+    #write.csv(percent_immobile, file = paste0(the_dir, "/", "2_Calculated_ellipse_percent_immobile_",basename(file)))
+    
+  
+    
+
+    ##datme<-dats[,(c(datss))]
+    datme<-perchan
+    propovertime<-list()
+    for(ro in 1:nrow(datme)){
+      
+      one_two<-sum(datme[ro,]< -25)/ncol(datme)*100
+      
+      propovertime[ro]<-(one_two)
+    }
+    d<-data.frame(t(dplyr::bind_cols(propovertime)))
+    colnames(d)<-c(paste0(gsub(".*curly/|_combo.csv","",file)))
+    d
+    average_time[i]<-d
+    
+    
+    
+    
+    mob_prestim_val<-colMeans(x[139:150,])
+    mob_base_norm<-perchan[1:150,]
+    mob_fivesecstim_norm<-perchan[150:300,]
+    mob_tensecstim_norm<-perchan[150:450,]
+    
+    mob_base_norm_mean<-colMeans(mob_base_norm)
+    mob_fivesecstim_norm_mean<-colMeans(mob_fivesecstim_norm)
+    mob_tensecstim_norm_mean<-colMeans(mob_tensecstim_norm)
+    
+    tensecframesimmobilesec<-colSums(perchan[150:450,]< -25)/30
+    fivesecframesimmobilesec<-colSums(perchan[150:300,]< -25)/30
+    
+    basesecframesimmobilesec<-colSums(perchan[1:150,]< -25)/30
+    
+    
+    
+    mob_individ_stats<- rbind(mob_base_norm_mean,mob_fivesecstim_norm_mean,mob_tensecstim_norm_mean,basesecframesimmobilesec,fivesecframesimmobilesec,tensecframesimmobilesec)
+    
+    genotyp<-(replicate(ncol(mob_fivesecstim_norm),paste0(gsub(".*stats/|.csv","",file))))
+    ssss<-rbind((genotyp),colnames(mob_individ_stats),(mob_individ_stats))
+    
+    rownames(ssss)<-c("Genotype","OG name",rownames(mob_individ_stats))
+    
+    colnames(ssss)<-NULL
+    
+    
+    mob_individ[[i]]<-data.frame(ssss)
+    write.csv(mob_individ_stats,file = paste0(the_dir, "/", "2_individual mob stats_",basename(file)))
+    
+    
+    
+    
+    
+    pmatarrangedd<-perchan[,order(colMeans(perchan[160:450,]))]
+    
+    
+    
+    pmatarranged<-apply(pmatarrangedd, 2, SMA, n=10)
+    
+    tiff(filename=paste(the_dir, "/",gsub(".csv","",basename(file)),"_mobility_heat.tiff",sep=""),width=1000,height=1000,units="px",res=300)#Enter the file name
+    my_palette <-  colorRampPalette(c("purple","white","green"))
+    heatmap.2(t(pmatarranged),breaks=seq(-25,25, length.out=50) ,scale="none",Rowv=FALSE, Colv=FALSE, col=my_palette, key=T, keysize=2,density.info="none", trace="none",cexCol=0.3,  labRow = NULL,cexRow=0.3,dendrogram="none", notecol="red") #Change the labRow
+    #heatmap.2(t(datme),breaks=seq(0,7, length.out=7) ,scale="none",Rowv=FALSE, Colv=FALSE, col=my_palette, key=T, keysize=1,density.info="none", trace="none",cexCol=0.3,  labRow = NULL,cexRow=0.3,dendrogram="none", notecol="red",  margins = c(5, 5)) #Change the labRow for the label of the row names. when scale is none there is no z score scale
+    
+    dev.off()
+    
+    
+    
+    
+    
+    
+    
+    calc_per_change<-cbind(perchans,permean,persem)
+    
+    write.csv(perchan, file = paste0(the_dir, "/", "2_Calculated_mob_stats_",basename(file)))
+    all_mob_mean[[i]]<-permean
+  }
+  
+  
+  long_combined<-data.frame(t(dplyr::bind_cols(mob_individ)))
+  write.csv(long_combined, file = "1_mob_individual_metrics.csv")
+  
+  long_combined<-data.frame((dplyr::bind_cols(average_time)))
+  colnames(long_combined)<-gsub(".*stats/|.csv","",allfiles)
+  write.csv(long_combined, file = "1_percent_immobile.csv")
+  
+  
+  
+  long_combined<-dplyr::bind_cols(all_mob_mean)
+  
+  write.csv(long_combined, file = "1_mobility_genotype_mean.csv")
+  
+  
+  
+  
+  
+  
+  
+  
+  ggg_data<-data.frame(read.csv("1_mobility_genotype_mean.csv", header = TRUE))
+  gg_data<-ggg_data[1:450,2:ncol(ggg_data)]
+  
+  for(ii in 1:ncol(gg_data)){
+    print(ii)
+    coln<-gsub("\\."," ",colnames(gg_data))
+    colnaa<-gsub(".csv","",coln)
+    colna<-gsub(" ","_",colnaa)
+    genotyp<-(replicate(nrow(gg_data),colna[ii]))
+    
+    longme<- data.frame(cbind((genotyp),gg_data[,ii]))
+    colnames(longme)<-c("Genotype","norm_mobility")
+    
+    write.csv(longme,paste(colna[ii],"__longper.csv"))
+    
+  }
+  
+  fills  <- list.files(pattern = '__longper.csv')
+  fills
+  tables <- lapply(fills, read.csv, header = TRUE)
+  long_per_res <- do.call(bind_rows , tables)
+  write.csv(long_per_res,"1__long_mobility.csv")
+  file.remove(fills)
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  all_area_indi<-read.csv("1_Long_Data.csv")
+  
+  all_mob_indi<-read.csv("1_mob_individual_metrics.csv")
+  
+  all_elip_indi<-read.csv("1_curly_individual_metrics.csv")
+  
+  
+  all_met_individual<-cbind(all_area_indi,all_mob_indi,all_elip_indi)
+  
+  write.csv(all_met_individual,"1__A_Final_area_mob_elip_indivd.csv")
+  
+  
+  
+  fname<- list.files(terwd, pattern = "2_Calculated_area", full.names = TRUE)
+  fname
+  all_meult<-list()
+  
+  ct_prop_li<-list()
+  mor_mob_prop_li<-list()
+  les_mob_prop_li<-list()
+  turn_prop_li<-list()
+  ctmor_mob_prop_li<-list()
+  ctles_mob_prop_li<-list()
+  ctmor_mobturn_prop_li<-list()
+  ctles_mobturn_prop_li<-list()
+  mor_mobturn_prop_li<-list()
+  les_mobturn_prop_li<-list()
+  ctturn_prop_li<-list()
+  
+  
+  
+  
+  
+  for(jj in 1:length(fname)){
+    
+    fname[1]
+    are<-read.csv(paste0(gsub("2_Calculated_area*.","2_Calculated_area_",fname[jj])),header=TRUE)
+    mob<-read.csv(paste0(gsub("2_Calculated_area*.","2_Calculated_mob_",fname[jj])),header=TRUE)
+    ellip<-read.csv(paste0(gsub("2_Calculated_area*.","2_Calculated_ellipse_",fname[jj])),header=TRUE)
+    
+    
+    
+    
+    
+    
+    are_ct<-data.frame(are[,2:ncol(are)])
+    
+    are_ct<-data.frame(are[,2:ncol(are)])
+    
+    
+    are_ct[are_ct>=-9.99]<-0
+    are_ct[are_ct<=-1]<-1
+    are_ct[are_ct==1]<- "ct"
+    are_ct[are_ct==0]<- ""
+    
+    
+    mob_less<-data.frame(mob[,2:ncol(mob)])
+    
+    mob_more<-data.frame(mob[,2:ncol(mob)])
+    
+    
+    mob_less[mob_less>= 24.99]<- 1000
+    mob_less[mob_less<= -24.99]<- -1000
+    mob_less[mob_less >= -24.99 & mob_less <= 24.99]<- 0
+    
+    mob_less[mob_less== 1000]<- "mor_mob"
+    mob_less[mob_less== -1000]<- "les_mob"
+    mob_less[mob_less== 0]<- ""
+    
+    
+    
+    
+    
+    
+    ellip_turn<-data.frame(ellip[,2:ncol(ellip)])
+    
+    
+    ellip_turn[ellip_turn<=2.51]<-1
+    
+    ellip_turn[ellip_turn>=2.51]<-""
+    
+    ellip_turn[ellip_turn==1]<-"turn"
+    
+    
+    
+    se<-list()
+    for(un in 1:ncol(are_ct)){
+      
+      
+      
+      ds<-data.frame(paste0(are_ct[,un],mob_less[,un],ellip_turn[,un]))
+      
+      se[un]<-ds
+      
+      
+    }
+    cate_behav<-data.frame(dplyr::bind_cols(se))
+    colnames(cate_behav)<-colnames(are_ct)
+    write.csv(cate_behav,paste0(gsub("2_Calculated_area_stats*","2_multi_metric_words_",fname[jj])))
+    
+    
+    
+    cate_behav[cate_behav == 	""	]	<-	0
+    cate_behav[cate_behav == 	"ct"	]	<-	1
+    cate_behav[cate_behav == 	"mor_mob"	]	<-	2
+    cate_behav[cate_behav == 	"les_mob"	]	<-	3
+    cate_behav[cate_behav == 	"turn"	]	<-	4
+    cate_behav[cate_behav == 	"ctmor_mob"	]	<-	5
+    cate_behav[cate_behav == 	"ctles_mob"	]	<-	6
+    cate_behav[cate_behav == 	"ctmor_mobturn"	]	<-	7
+    cate_behav[cate_behav == 	"ctles_mobturn"	]	<-	8
+    cate_behav[cate_behav == 	"mor_mobturn"	]	<-	9
+    cate_behav[cate_behav == 	"les_mobturn"	]	<-	10
+    cate_behav[cate_behav == 	"ctturn"	]	<-	11
+    colnames(cate_behav)<-colnames(are_ct)
+    write.csv(cate_behav,paste0(gsub("2_Calculated_area_stats*","2_multi_met_numeric_data_",fname[jj])))
+    
+    
+    all_meult[[jj]]<-data.frame(cate_behav)
+    cate_behav<-data.frame(dplyr::bind_cols(se))
+    
+    
+    ct_prop<-rowSums(cate_behav=="ct")/ncol(cate_behav)*100
+    mor_mob_prop<-rowSums(cate_behav=="mor_mob")/ncol(cate_behav)*100
+    les_mob_prop<-rowSums(cate_behav=="les_mob")/ncol(cate_behav)*100
+    turn_prop<-rowSums(cate_behav=="turn")/ncol(cate_behav)*100
+    ctmor_mob_prop<-rowSums(cate_behav=="ctmor_mob")/ncol(cate_behav)*100
+    ctles_mob_prop<-rowSums(cate_behav=="ctles_mob")/ncol(cate_behav)*100
+    ctmor_mobturn_prop<-rowSums(cate_behav=="ctmor_mobturn")/ncol(cate_behav)*100
+    ctles_mobturn_prop<-rowSums(cate_behav=="ctles_mobturn")/ncol(cate_behav)*100
+    mor_mobturn_prop<-rowSums(cate_behav=="mor_mobturn")/ncol(cate_behav)*100
+    les_mobturn_prop<-rowSums(cate_behav=="les_mobturn")/ncol(cate_behav)*100
+    ctturn_prop<-rowSums(cate_behav=="ctturn")/ncol(cate_behav)*100
+    
+    fegs<-cbind(
+      ct_prop,
+      mor_mob_prop,
+      les_mob_prop,
+      turn_prop,
+      ctmor_mob_prop,
+      ctles_mob_prop,
+      ctmor_mobturn_prop,
+      ctles_mobturn_prop,
+      mor_mobturn_prop,
+      les_mobturn_prop,
+      ctturn_prop)
+    
+    fegSMA<-apply(fegs, 2, SMA, n=10)
+    sabme<-data.frame(cbind(replicate(nrow(fegs),gsub(".*2_Calculated_area_stats_|.csv","",fname[jj])),fegSMA))
+    
+    colnames(sabme)<-c("Genotype",colnames(fegs))
+    
+    
+    
+    write.csv(sabme[10:nrow(sabme),],paste0(gsub("2_Calculated_area_stats*","2_multi_met_data_",fname[jj])))
+    
+    
+    ct_prop_df<-data.frame(ct_prop)
+    colnames(ct_prop_df)<-gsub(".*2_Calculated_area_stats_|.csv","",fname[jj])
+    mor_mob_prop_df<-data.frame(mor_mob_prop)
+    colnames(mor_mob_prop_df)<-gsub(".*2_Calculated_area_stats_|.csv","",fname[jj])
+    les_mob_prop_df<-data.frame(les_mob_prop)
+    colnames(les_mob_prop_df)<-gsub(".*2_Calculated_area_stats_|.csv","",fname[jj])
+    turn_prop_df<-data.frame(turn_prop)
+    colnames(turn_prop_df)<-gsub(".*2_Calculated_area_stats_|.csv","",fname[jj])
+    ctmor_mob_prop_df<-data.frame(ctmor_mob_prop)
+    colnames(ctmor_mob_prop_df)<-gsub(".*2_Calculated_area_stats_|.csv","",fname[jj])
+    ctles_mob_prop_df<-data.frame(ctles_mob_prop)
+    colnames(ctles_mob_prop_df)<-gsub(".*2_Calculated_area_stats_|.csv","",fname[jj])
+    ctmor_mobturn_prop_df<-data.frame(ctmor_mobturn_prop)
+    colnames(ctmor_mobturn_prop_df)<-gsub(".*2_Calculated_area_stats_|.csv","",fname[jj])
+    ctles_mobturn_prop_df<-data.frame(ctles_mobturn_prop)
+    colnames(ctles_mobturn_prop_df)<-gsub(".*2_Calculated_area_stats_|.csv","",fname[jj])
+    mor_mobturn_prop_df<-data.frame(mor_mobturn_prop)
+    colnames(mor_mobturn_prop_df)<-gsub(".*2_Calculated_area_stats_|.csv","",fname[jj])
+    les_mobturn_prop_df<-data.frame(les_mobturn_prop)
+    colnames(les_mobturn_prop_df)<-gsub(".*2_Calculated_area_stats_|.csv","",fname[jj])
+    ctturn_prop_df<-data.frame(ctturn_prop)
+    colnames(ctturn_prop_df)<-gsub(".*2_Calculated_area_stats_|.csv","",fname[jj])
+    
+    
+    
+    
+    ct_prop_li[[jj]]<-(ct_prop_df)
+    mor_mob_prop_li[[jj]]<-(mor_mob_prop_df)
+    les_mob_prop_li[[jj]]<-(les_mob_prop_df)
+    turn_prop_li[[jj]]<-(turn_prop_df)
+    ctmor_mob_prop_li[[jj]]<-(ctmor_mob_prop_df)
+    ctles_mob_prop_li[[jj]]<-(ctles_mob_prop_df)
+    ctmor_mobturn_prop_li[[jj]]<-(ctmor_mobturn_prop_df)
+    ctles_mobturn_prop_li[[jj]]<-(ctles_mobturn_prop_df)
+    mor_mobturn_prop_li[[jj]]<-(mor_mobturn_prop_df)
+    les_mobturn_prop_li[[jj]]<-(les_mobturn_prop_df)
+    ctturn_prop_li[[jj]]<-(ctturn_prop_df)
+    
+    
+    
+    satiff<-paste0(gsub("2_Calculated_area_stats*","2_multi_metric_heatmap_",fname[jj]))
+    
+    
+    
+    tiff(filename=gsub(".csv",".tiff",satiff),width=1000,height=1000,units="px",res=300)#Enter the file name
+    my_palette <-  colorRampPalette(c("white","red"))
+    
+    print(heatmap.2(t(fegs),breaks=seq(0,100, length.out=100) ,scale="none",Rowv=FALSE, Colv=FALSE, col=my_palette, key=T, keysize=2,density.info="none", trace="none",cexCol=0.3,  labRow = NULL,cexRow=0.3,dendrogram="none", notecol="red")) #Change the labRow
+    #heatmap.2(t(datme),breaks=seq(0,7, length.out=7) ,scale="none",Rowv=FALSE, Colv=FALSE, col=my_palette, key=T, keysize=1,density.info="none", trace="none",cexCol=0.3,  labRow = NULL,cexRow=0.3,dendrogram="none", notecol="red",  margins = c(5, 5)) #Change the labRow for the label of the row names. when scale is none there is no z score scale
+    
+    dev.off()
+    
+    
+    
+    
+    
+  }
+  
+  all_meult_dat<-dplyr::bind_cols(all_meult)
+  write.csv(all_meult_dat,"1_All_N_numer_mult.csv")
+  
+  
+  
+  ct_prop_dat<-dplyr::bind_cols( ct_prop_li)
+  write.csv(ct_prop_dat,"1_All_ct_prop_lidat.csv")
+  
+  max(ct_prop_dat[,1])
+  max(ct_prop_dat)
+  max(ct_prop_dat[,1])-max(ct_prop_dat)
+  
+  
+  ct_prop_dat<-dplyr::bind_cols( mor_mob_prop_li)
+  write.csv(ct_prop_dat,"1_All_mor_mob_prop_lidat.csv")
+  
+  max(ct_prop_dat[,1])
+  max(ct_prop_dat)
+  max(ct_prop_dat[,1])-max(ct_prop_dat)
+  
+  
+  ct_prop_dat<-dplyr::bind_cols( les_mob_prop_li)
+  write.csv(ct_prop_dat,"1_All_les_mob_prop_li.csv")
+  
+  max(ct_prop_dat[,1])
+  max(ct_prop_dat)
+  max(ct_prop_dat[,1])-max(ct_prop_dat)
+  
+  
+  ct_prop_dat<-dplyr::bind_cols( turn_prop_li)
+  write.csv(ct_prop_dat,"1_All_turn_prop_li.csv")
+  
+  max(ct_prop_dat[,1])
+  max(ct_prop_dat)
+  max(ct_prop_dat[,1])-max(ct_prop_dat)
+  
+  
+  ct_prop_dat<-dplyr::bind_cols( ctmor_mob_prop_li)
+  write.csv(ct_prop_dat,"1_All_ctmor_mob_prop_li.csv")
+  
+  max(ct_prop_dat[,1])
+  max(ct_prop_dat)
+  max(ct_prop_dat[,1])-max(ct_prop_dat)
+  
+  
+  ct_prop_dat<-dplyr::bind_cols( ctles_mob_prop_li)
+  write.csv(ct_prop_dat,"1_All_ctles_mob_prop_li.csv")
+  
+  max(ct_prop_dat[,1])
+  max(ct_prop_dat)
+  max(ct_prop_dat[,1])-max(ct_prop_dat)
+  
+  
+  ct_prop_dat<-dplyr::bind_cols( ctmor_mobturn_prop_li)
+  write.csv(ct_prop_dat,"1_All_ctmor_mobturn_prop_li.csv")
+  
+  max(ct_prop_dat[,1])
+  max(ct_prop_dat)
+  max(ct_prop_dat[,1])-max(ct_prop_dat)
+  
+  
+  ct_prop_dat<-dplyr::bind_cols( ctles_mobturn_prop_li)
+  write.csv(ct_prop_dat,"1_All_ctles_mobturn_prop_li.csv")
+  
+  max(ct_prop_dat[,1])
+  max(ct_prop_dat)
+  max(ct_prop_dat[,1])-max(ct_prop_dat)
+  
+  
+  ct_prop_dat<-dplyr::bind_cols( mor_mobturn_prop_li)
+  write.csv(ct_prop_dat,"1_All_mor_mobturn_prop_li.csv")
+  
+  max(ct_prop_dat[,1])
+  max(ct_prop_dat)
+  max(ct_prop_dat[,1])-max(ct_prop_dat)
+  
+  
+  ct_prop_dat<-dplyr::bind_cols( les_mobturn_prop_li)
+  write.csv(ct_prop_dat,"1_All_les_mobturn_prop_li.csv")
+  
+  max(ct_prop_dat[,1])
+  max(ct_prop_dat)
+  max(ct_prop_dat[,1])-max(ct_prop_dat)
+  
+  
+  ct_prop_dat<-dplyr::bind_cols( ctturn_prop_li)
+  write.csv(ct_prop_dat,"1_All_ctturn_prop_li.csv")
+  
+  max(ct_prop_dat[,1])
+  max(ct_prop_dat)
+  max(ct_prop_dat[,1])-max(ct_prop_dat)
+  
+  
+  fills  <- list.files(pattern = '2_multi_met_data')
+  fills
+  tables <- lapply(fills, read.csv, header = TRUE)
+  long_per_res <- do.call(bind_rows , tables)
+  write.csv(long_per_res,"1_SMA_prop_multi_met.csv")
+
+  
+}
